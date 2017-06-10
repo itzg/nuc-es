@@ -1,0 +1,98 @@
+version: '3'
+
+services:
+  master:
+    image: itzg/elasticsearch:5.4
+    environment:
+      TYPE: MASTER
+    restart: always
+    deploy:
+      update_config:
+        parallelism: 1
+        delay: 1m
+      restart_policy:
+        condition: any
+
+  gateway:
+    image: itzg/elasticsearch:5.4
+    ports:
+      - "9200:9200"
+    environment:
+      TYPE: GATEWAY
+      UNICAST_HOSTS: master
+    restart: always
+    deploy:
+      restart_policy:
+        condition: any
+
+  ingest:
+    image: itzg/elasticsearch:5.4
+    ports:
+      - "9222:9200"
+    environment:
+      TYPE: INGEST
+      UNICAST_HOSTS: master
+    restart: always
+    deploy:
+      restart_policy:
+        condition: any
+
+  data_a:
+    image: itzg/elasticsearch:5.4
+    environment:
+      TYPE: DATA
+      UNICAST_HOSTS: master
+    volumes:
+      - data_a:/data
+    restart: always
+    deploy:
+      restart_policy:
+        condition: any
+  data_b:
+    image: itzg/elasticsearch:5.4
+    environment:
+      TYPE: DATA
+      UNICAST_HOSTS: master
+    volumes:
+      - data_b:/data
+    restart: always
+    deploy:
+      restart_policy:
+        condition: any
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:5.4.1
+    environment:
+      XPACK_MONITORING_ENABLED: "false"
+    ports:
+     - "12201:12201/udp"
+    volumes:
+      - "${PWD}/logstash-pipeline:/usr/share/logstash/pipeline/:ro"
+    restart: always
+
+  kibana:
+    image: kibana
+    ports:
+      - "5601:5601"
+    logging:
+      driver: gelf
+      options:
+        gelf-address: udp://localhost:12201
+    restart: always
+    deploy:
+      restart_policy:
+        condition: any
+    environment:
+      ELASTICSEARCH_URL: http://gateway:9200
+
+  curator:
+    image: itzg/elasticsearch-curator
+    restart: always
+    environment:
+      DELETE_AGE: 7
+      ES_HOST: master
+
+
+volumes:
+  data_a:
+  data_b:
